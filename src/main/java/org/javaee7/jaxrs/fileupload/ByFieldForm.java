@@ -7,7 +7,8 @@ import org.jboss.resteasy.plugins.providers.multipart.InputPart;
 public class ByFieldForm {
   
   @FormParam("name") private String name;
-  @FormParam("data") private InputPart data;
+  @FormParam("data") 
+  private InputPart data;
   /**
    * @return the name
    */

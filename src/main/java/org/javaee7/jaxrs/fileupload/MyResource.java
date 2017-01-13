@@ -12,6 +12,7 @@ import javax.ws.rs.Consumes;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.xml.bind.JAXBContext;
@@ -19,8 +20,8 @@ import javax.xml.bind.JAXBException;
 import javax.xml.bind.Unmarshaller;
 import javax.xml.transform.stream.StreamSource;
 
-import org.jboss.resteasy.annotations.providers.multipart.MultipartForm;
 import org.jboss.resteasy.plugins.providers.multipart.InputPart;
+import org.jboss.resteasy.plugins.providers.multipart.MultipartFormDataInput;
 
 /**
  * @author Xavier Coulon
@@ -30,21 +31,28 @@ public class MyResource {
 
   @POST
   @Path("/uploadMultipart")
-  @Consumes(MediaType.MULTIPART_FORM_DATA)
+  @Consumes({MediaType.MULTIPART_FORM_DATA, MediaType.WILDCARD, MediaType.TEXT_PLAIN, MediaType.APPLICATION_OCTET_STREAM })
   @Produces(MediaType.TEXT_PLAIN)
-  public Response postMultipart(@MultipartForm ByFieldForm form)
+  public Response postMultipart(MultipartFormDataInput input)
   {
 
     try {
-      InputData input = parse(form.getData());
-      OutputData output = new OutputData()
-                          .withName(form.getName())
-                          .withContentType(form.getData().getMediaType())
-                          .withItems(input.getItems());
+//      input.getFormDataMap().get("name");
+      InputStream image = input.getFormDataPart("data", new GenericType<InputStream>() {});
+      int size = 10_000_000;
+      long totalByte = 0;
+      byte[] buffer = new byte[size];
+      int count = image.read(buffer);
+      while (count != -1) { 
+        totalByte += count;
+        count = image.read(buffer);
+        System.out.println(totalByte);
+      }
+      image.close();
       return Response.ok()
-                     .entity(output)
+                     .entity(Long.toString(totalByte))
                      .build();
-    } catch (JAXBException | IOException e) {
+    } catch (Exception e) {
       return Response.serverError()
                      .entity(e.getMessage())
                      .build();
