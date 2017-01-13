@@ -8,13 +8,13 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.MalformedURLException;
-import java.net.URI;
 import java.net.URL;
 
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.client.WebTarget;
+import javax.ws.rs.core.GenericEntity;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
@@ -23,6 +23,7 @@ import org.assertj.core.api.Condition;
 import org.jboss.arquillian.container.test.api.Deployment;
 import org.jboss.arquillian.junit.Arquillian;
 import org.jboss.arquillian.test.api.ArquillianResource;
+import org.jboss.resteasy.plugins.providers.multipart.MultipartFormDataOutput;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.WebArchive;
 import org.junit.Before;
@@ -37,85 +38,112 @@ import org.junit.runner.RunWith;
 @RunWith(Arquillian.class)
 public class MyResourceTest {
 
-    @Deployment(testable = false)
-    public static WebArchive createDeployment() {
-        return ShrinkWrap.create(WebArchive.class).addClasses(MyApplication.class, MyResource.class, ByFieldForm.class, InputData.class, OutputData.class);
+  @Deployment(testable = false)
+  public static WebArchive createDeployment()
+  {
+    return ShrinkWrap.create(WebArchive.class)
+                     .addClasses(MyApplication.class, MyResource.class, ByFieldForm.class, InputData.class, OutputData.class);
+  }
+
+  private static WebTarget target;
+
+  private static File      tempFile;
+  private static int       fileSize = 10000;
+  @ArquillianResource
+  private URL              base;
+
+  @BeforeClass
+  public static void generateSampleFile() throws IOException
+  {
+    tempFile = File.createTempFile("javaee7samples", ".png");
+    // fill the file with 1KB of content
+    try (FileOutputStream outputStream = new FileOutputStream(tempFile)) {
+      for (int i = 0; i < fileSize; i++) {
+        outputStream.write(0);
+      }
+      outputStream.flush();
     }
+    assertThat(tempFile).canRead()
+                        .has(new Condition<File>() {
 
-    private static WebTarget target;
+                          @Override
+                          public boolean matches(File tempFile)
+                          {
+                            return tempFile.length() == fileSize;
+                          }
+                        });
+  }
 
-    private static File tempFile;
-    private static File bigFile;
-    @ArquillianResource
-    private URL base;
+  @Before
+  public void setUpClass() throws MalformedURLException
+  {
+    Client client = ClientBuilder.newClient();
+    // target = client.target(URI.create(new URL(base, "webresources/endpoint").toExternalForm()));
+    target = client.target("http://localhost:8080/upload-file/webresources/endpoint");
+  }
 
-    @BeforeClass
-    public static void generateSampleFile() throws IOException {
-        tempFile = File.createTempFile("javaee7samples", ".png");
-        bigFile = new File("/Users/freedev/virtualbox/solr-ubuntu-vagrant_ubuntu-01_1431694008074_57672/solr-ubuntu-vagrant-disk-01.vdi");
-        // fill the file with 1KB of content
-        try (FileOutputStream outputStream = new FileOutputStream(tempFile)) {
-            for (int i = 0; i < 1000; i++) {
-                outputStream.write(0);
-            }
-        }
-        assertThat(tempFile).canRead().has(new Condition<File>() {
+  @Test
+  public void shouldPostOctetStreamContentAsInputStream()
+  {
+    // when
+    Long uploadedFileSize = target.path("/upload")
+                                  .request()
+                                  .post(Entity.entity(tempFile, MediaType.APPLICATION_OCTET_STREAM), Long.class);
+    // then
+    assertThat(uploadedFileSize).isEqualTo(fileSize);
+  }
 
-            @Override
-            public boolean matches(File tempFile) {
-                return tempFile.length() == 1000;
-            }
-        });
-    }
+  @Test
+  public void shouldNotPostImagePngContentAsInputStream()
+  {
+    // when
+    final Response response = target.path("/upload")
+                                    .request()
+                                    .post(Entity.entity(tempFile, "image/png"));
+    // then
+    assertThat(response.getStatus()).isEqualTo(Status.UNSUPPORTED_MEDIA_TYPE.getStatusCode());
+  }
 
-    @Before
-    public void setUpClass() throws MalformedURLException {
-        Client client = ClientBuilder.newClient();
-        target = client.target(URI.create(new URL(base, "webresources/endpoint").toExternalForm()));
-//        target = client.target("http://localhost:8080/upload-file/webresources/endpoint");
-    }
+  @Test
+  public void shouldPostOctetStreamContentAsFile()
+  {
+    // when
+    Long uploadedFileSize = target.path("/upload2")
+                                  .request()
+                                  .post(Entity.entity(tempFile, MediaType.APPLICATION_OCTET_STREAM), Long.class);
+    // then
+    assertThat(uploadedFileSize).isEqualTo(fileSize);
+  }
 
-    @Test
-    public void shouldPostOctetStreamContentAsInputStream() {
-        // when
-        Long uploadedFileSize = target.path("/upload").request()
-            .post(Entity.entity(tempFile, MediaType.APPLICATION_OCTET_STREAM), Long.class);
-        // then
-        assertThat(uploadedFileSize).isEqualTo(1000);
-    }
+  @Test
+  public void shouldPostImagePngContentAsFile()
+  {
+    // when
+    Long uploadedFileSize = target.path("/upload2")
+                                  .request()
+                                  .post(Entity.entity(tempFile, "image/png"), Long.class);
+    // then
+    assertThat(uploadedFileSize).isEqualTo(fileSize);
+  }
 
-    @Test
-    public void shouldNotPostImagePngContentAsInputStream() {
-        // when
-        final Response response = target.path("/upload").request().post(Entity.entity(tempFile, "image/png"));
-        // then
-        assertThat(response.getStatus()).isEqualTo(Status.UNSUPPORTED_MEDIA_TYPE.getStatusCode());
-    }
+  @Test
+  public void testBigFile() throws FileNotFoundException
+  {
+    // FileInputStream fis = new FileInputStream(bigFile);
+    System.out.println(tempFile.length());
+    MultipartFormDataOutput mdo = new MultipartFormDataOutput();
+    mdo.addFormData("name", "Test by setter", MediaType.TEXT_PLAIN_TYPE);
+    mdo.addFormData("data", new FileInputStream(tempFile), MediaType.APPLICATION_OCTET_STREAM_TYPE);
+    GenericEntity<MultipartFormDataOutput> entity = new GenericEntity<MultipartFormDataOutput>(mdo) {};
 
-    @Test
-    public void shouldPostOctetStreamContentAsFile() {
-        // when
-        Long uploadedFileSize = target.path("/upload2").request()
-            .post(Entity.entity(tempFile, MediaType.APPLICATION_OCTET_STREAM), Long.class);
-        // then
-        assertThat(uploadedFileSize).isEqualTo(1000);
-    }
+    Response post = target.path("/uploadMultipart")
+                          .request(MediaType.MULTIPART_FORM_DATA_TYPE)
+                          .accept(MediaType.MEDIA_TYPE_WILDCARD)
+                          .post(Entity.entity(entity, MediaType.MULTIPART_FORM_DATA_TYPE));
+    assertThat(post.getStatus()).isEqualTo(200);
+    Long uploadedFileSize = post.readEntity(Long.class);
+    assertThat(uploadedFileSize).isEqualTo(tempFile.length());
 
-    @Test
-    public void shouldPostImagePngContentAsFile() {
-        // when
-        Long uploadedFileSize = target.path("/upload2").request()
-            .post(Entity.entity(tempFile, "image/png"), Long.class);
-        // then
-        assertThat(uploadedFileSize).isEqualTo(1000);
-    }
-    
-    @Test
-    public void testBigFile() throws FileNotFoundException {
-        FileInputStream fis = new FileInputStream(bigFile);
-        Response post = target.path("/uploadMultipart").request(MediaType.MULTIPART_FORM_DATA_TYPE)
-            .post(Entity.entity(tempFile, MediaType.MULTIPART_FORM_DATA), Response.class);
-//      target.path("/upload").request().
-    }
+  }
 
 }
