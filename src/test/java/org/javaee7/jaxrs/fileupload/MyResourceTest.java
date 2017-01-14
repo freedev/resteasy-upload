@@ -42,7 +42,7 @@ public class MyResourceTest {
   public static WebArchive createDeployment()
   {
     return ShrinkWrap.create(WebArchive.class)
-                     .addClasses(MyApplication.class, MyResource.class, ByFieldForm.class, InputData.class, OutputData.class);
+                     .addClasses(MyApplication.class, MyResource.class);
   }
 
   private static WebTarget target;
