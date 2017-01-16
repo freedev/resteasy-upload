@@ -8,6 +8,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
 
 import javax.ws.rs.client.Client;
@@ -78,8 +79,8 @@ public class MyResourceTest {
   public void setUpClass() throws MalformedURLException
   {
     Client client = ClientBuilder.newClient();
-    // target = client.target(URI.create(new URL(base, "webresources/endpoint").toExternalForm()));
-    target = client.target("http://localhost:8080/upload-file/webresources/endpoint");
+    target = client.target(URI.create(new URL(base, "webresources/endpoint").toExternalForm()));
+    // target = client.target("http://localhost:8080/upload-file/webresources/endpoint");
   }
 
   @Test
